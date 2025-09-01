@@ -1,19 +1,25 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useRef } from 'react';
-import { View, AppSettings, PrayerTimes, AppContextType } from '../types';
+import { View, AppSettings, PrayerTimes, AppContextType, Chapter, DailyChallengeState } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { getUserLocation, getPrayerTimes, getQiblaDirection } from '../services/prayerTimesService';
+import { useDailyChallenges } from '../hooks/useDailyChallenges';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [practiceVerse, setPracticeVerse] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
+  const [gotoVerse, setGotoVerse] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
+  const [gotoHadith, setGotoHadith] = useState<{ bookSlug: string; chapter: Chapter } | null>(null);
+  const [gotoLearningPath, setGotoLearningPath] = useState<{ topicId: string } | null>(null);
+
   const { settings, saveSettings } = useSettings();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [qiblaDirection, setQiblaDirection] = useState<number | null>(null);
   const [isLoadingLocationData, setIsLoadingLocationData] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
+  
+  const { dailyChallengeState, logChallengeAction } = useDailyChallenges();
 
   const lastFetchedDate = useRef<number | null>(null);
 
@@ -39,14 +45,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     fetchLocationData(); // Initial fetch on component mount
 
-    // Set up an interval to check for date changes and refetch data daily
     const dateCheckInterval = setInterval(() => {
         if (new Date().getDate() !== lastFetchedDate.current) {
             fetchLocationData();
         }
     }, 60 * 1000); // Check every minute
 
-    return () => clearInterval(dateCheckInterval); // Cleanup interval on unmount
+    return () => clearInterval(dateCheckInterval);
   }, [fetchLocationData]);
 
   const handleResumePractice = useCallback((surahNumber: number, ayahNumber: number) => {
@@ -54,17 +59,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('tajweed');
   }, []);
   
-  const value = {
+  const handleGotoVerse = useCallback((surahNumber: number, ayahNumber: number) => {
+    setGotoVerse({ surahNumber, ayahNumber });
+    setCurrentView('read');
+  }, []);
+  
+  const handleGotoHadith = useCallback((bookSlug: string, chapter: Chapter) => {
+    setGotoHadith({ bookSlug, chapter });
+    setCurrentView('library');
+  }, []);
+
+  const handleGotoLearningPath = useCallback((topicId: string) => {
+    setGotoLearningPath({ topicId });
+    setCurrentView('learning');
+  }, []);
+
+
+  const value: AppContextType = {
     currentView,
     setCurrentView,
     practiceVerse,
     handleResumePractice,
+    gotoVerse,
+    handleGotoVerse,
+    gotoHadith,
+    handleGotoHadith,
+    gotoLearningPath,
+    handleGotoLearningPath,
     settings,
     saveSettings,
     prayerTimes,
     qiblaDirection,
     isLoadingLocationData,
-    locationError
+    locationError,
+    dailyChallengeState,
+    logChallengeAction
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

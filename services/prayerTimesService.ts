@@ -1,4 +1,4 @@
-import { PrayerTimes, PrayerTimesApiResponse, QiblaApiResponse } from '../types';
+import { PrayerTimes, PrayerTimesCalendarApiResponse, QiblaApiResponse } from '../types';
 
 /**
  * Gets the user's current geographical coordinates.
@@ -40,35 +40,45 @@ export const getUserLocation = (): Promise<{ latitude: number; longitude: number
 };
 
 /**
- * Fetches prayer times for a given date and coordinates from the Aladhan API.
+ * Fetches prayer times for a given date and coordinates from the Aladhan API using the calendar endpoint.
  * @param coordinates - An object with the user's latitude and longitude.
- * @returns A promise that resolves to a PrayerTimes object.
+ * @returns A promise that resolves to a PrayerTimes object for the current day.
  */
 export const getPrayerTimes = async (coordinates: { latitude: number; longitude: number }): Promise<PrayerTimes> => {
   try {
     const { latitude, longitude } = coordinates;
-    // We can use a simple calculation method; '2' is ISNA (Islamic Society of North America)
-    const method = 2;
-    const response = await fetch(`https://api.aladhan.com/v1/timings?latitude=${latitude}&longitude=${longitude}&method=${method}`);
+    const date = new Date();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const method = 2; // ISNA (Islamic Society of North America)
+
+    const response = await fetch(`https://api.aladhan.com/v1/calendar?latitude=${latitude}&longitude=${longitude}&method=${method}&month=${month}&year=${year}`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data: PrayerTimesApiResponse = await response.json();
+    const data: PrayerTimesCalendarApiResponse = await response.json();
 
-    if (data.code === 200 && data.data.timings) {
-      // The API returns many values, we only need the main 5
-      const { Fajr, Dhuhr, Asr, Maghrib, Isha } = data.data.timings;
+    if (data.code === 200 && data.data && data.data.length > 0) {
+      const todayData = data.data[date.getDate() - 1]; // Array is 0-indexed, getDate() is 1-indexed
+      if (!todayData || !todayData.timings) {
+        throw new Error("Prayer time data for today is missing in the API response.");
+      }
+      const { Fajr, Dhuhr, Asr, Maghrib, Isha } = todayData.timings;
       return { Fajr, Dhuhr, Asr, Maghrib, Isha };
     } else {
       throw new Error(data.status || "Invalid API response for prayer times.");
     }
   } catch (error) {
     console.error("Failed to fetch prayer times:", error);
-    throw new Error("Could not load prayer times from the server.");
+    if (error instanceof Error && error.message.toLowerCase().includes('failed to fetch')) {
+        throw new Error("Could not load prayer times. Please check your internet connection.");
+    }
+    throw new Error("An unexpected error occurred while loading prayer times.");
   }
 };
+
 
 /**
  * Fetches the Qibla direction from the user's current location.

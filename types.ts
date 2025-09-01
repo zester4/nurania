@@ -1,5 +1,4 @@
-
-export type View = 'home' | 'study' | 'tajweed' | 'hadith' | 'prayer' | 'settings' | 'read';
+export type View = 'home' | 'study' | 'tajweed' | 'prayer' | 'settings' | 'read' | 'search' | 'library' | 'learning';
 
 export interface AppSettings {
   notificationsEnabled: boolean;
@@ -149,6 +148,16 @@ export interface PrayerTimesApiResponse {
     };
 }
 
+// New type for Calendar API response
+export interface PrayerTimesCalendarApiResponse {
+    code: number;
+    status: string;
+    data: {
+        timings: PrayerTimes;
+    }[];
+}
+
+
 // New types for Qibla direction
 export interface QiblaData {
     latitude: number;
@@ -167,6 +176,7 @@ export interface Ayah {
     id: number;
     text: string;
     translation_en: string;
+    reciters?: Reciter[];
 }
 
 export interface FullSurah {
@@ -179,16 +189,102 @@ export interface FullSurah {
     verses: Ayah[];
 }
 
+// New type for Quran Search
+export interface SearchResult {
+  surahNumber: number;
+  surahName: string;
+  ayahNumber: number;
+  arabic: string;
+  english: string;
+}
+
+// New type for Bookmarked Verse
+export interface BookmarkedVerse {
+  surahNumber: number;
+  surahName: string;
+  ayahNumber: number;
+  arabic: string;
+  english: string;
+}
+
+// Type for last viewed hadith
+export interface LastViewedHadith {
+  bookSlug: string;
+  bookName: string;
+  chapter: Chapter;
+}
+
+// Types for Learning Paths
+export interface LearningPathTopic {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+}
+
+export interface Quiz {
+  question: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
+
+export interface LearningStep {
+  id: string;
+  type: 'quran' | 'hadith' | 'tafsir' | 'quiz';
+  title: string;
+  reference: {
+    surah?: number;
+    ayah?: number;
+    bookSlug?: string;
+    hadithKeyword?: string;
+  };
+  quiz?: Quiz;
+  content: string;
+}
+
+export interface LearningPath {
+  topic: string;
+  introduction: string;
+  steps: LearningStep[];
+}
+
+// Types for Daily Challenges
+export type ChallengeType = 'readVerses' | 'practiceAyah' | 'bookmarkVerse' | 'completeLearningStep';
+
+export interface Challenge {
+  id: string;
+  type: ChallengeType;
+  description: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+}
+
+export interface DailyChallengeState {
+  challenges: Challenge[];
+  streak: number;
+  lastUpdate: string; // ISO date string YYYY-MM-DD
+}
+
 // New type for App Context
 export interface AppContextType {
   currentView: View;
   setCurrentView: (view: View) => void;
   practiceVerse: { surahNumber: number; ayahNumber: number } | null;
   handleResumePractice: (surahNumber: number, ayahNumber: number) => void;
+  gotoVerse: { surahNumber: number; ayahNumber: number } | null;
+  handleGotoVerse: (surahNumber: number, ayahNumber: number) => void;
+  gotoHadith: { bookSlug: string; chapter: Chapter } | null;
+  handleGotoHadith: (bookSlug: string, chapter: Chapter) => void;
+  gotoLearningPath: { topicId: string } | null;
+  handleGotoLearningPath: (topicId: string) => void;
   settings: AppSettings;
   saveSettings: (newSettings: Partial<AppSettings>) => void;
   prayerTimes: PrayerTimes | null;
   qiblaDirection: number | null;
   isLoadingLocationData: boolean;
   locationError: string | null;
+  dailyChallengeState: DailyChallengeState;
+  logChallengeAction: (type: ChallengeType, amount?: number) => void;
 }

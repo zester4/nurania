@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { StructuredTajweedFeedback } from "../types";
+import { StructuredTajweedFeedback, LearningPath } from "../types";
 
 const API_KEY = process.env.API_KEY;
 
@@ -111,4 +111,75 @@ export const getTajweedFeedback = async (
     console.error("Error fetching Tajweed feedback from Gemini:", error);
     throw new Error("There was an error analyzing the recitation. The AI may not have been able to provide structured feedback for this recitation.");
   }
+};
+
+const learningPathSchema = {
+    type: Type.OBJECT,
+    properties: {
+        topic: { type: Type.STRING },
+        introduction: { type: Type.STRING },
+        steps: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: { type: Type.STRING, description: "A unique slug-like ID for the step, e.g., 'salah-quran-baqarah-45'" },
+                    type: { type: Type.STRING, enum: ['quran', 'hadith', 'tafsir', 'quiz'] },
+                    title: { type: Type.STRING, description: "A short, engaging title for the learning step." },
+                    content: { type: Type.STRING, description: "For Tafsir, the full explanation. For Quran/Hadith, a brief summary of what the user should focus on. For quizzes, a lead-in sentence." },
+                    reference: {
+                        type: Type.OBJECT,
+                        properties: {
+                            surah: { type: Type.INTEGER, description: "Surah number for Quran verses." },
+                            ayah: { type: Type.INTEGER, description: "Ayah number for Quran verses." },
+                            bookSlug: { type: Type.STRING, description: "Slug of the Hadith book (e.g., 'sahih-bukhari')." },
+                            hadithKeyword: { type: Type.STRING, description: "A primary English keyword to find the relevant Hadith." }
+                        }
+                    },
+                    quiz: {
+                        type: Type.OBJECT,
+                        properties: {
+                            question: { type: Type.STRING },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            correctAnswerIndex: { type: Type.INTEGER },
+                            explanation: { type: Type.STRING, description: "A brief explanation for why the correct answer is right." }
+                        }
+                    }
+                },
+                required: ["id", "type", "title", "content", "reference"]
+            }
+        }
+    },
+    required: ["topic", "introduction", "steps"]
+};
+
+export const generateLearningPath = async (topic: string): Promise<LearningPath> => {
+    try {
+        const prompt = `You are an expert Islamic curriculum designer. Create a structured, beginner-friendly learning path on the topic of "${topic}". The path should consist of 5-7 steps, mixing Quran verses, related Hadith, concise Tafsir (explanation), and a multiple-choice quiz question to reinforce learning.
+        
+        Instructions:
+        1.  Start with a foundational Quran verse.
+        2.  Follow up with a supporting Hadith.
+        3.  Provide a concise 'tafsir' or explanation that connects the verse and Hadith.
+        4.  Continue this pattern, building on the concepts.
+        5.  Include one simple 'quiz' step somewhere in the middle of the path to check for understanding.
+        6.  For Hadith references, provide a 'bookSlug' from this list: 'sahih-bukhari', 'sahih-muslim', 'al-tirmidhi', 'abu-dawood', 'ibn-e-majah', 'sunan-nasai', and a simple 'hadithKeyword' for searching.
+        7.  Ensure all content is authentic, well-regarded, and presented in a clear, educational tone.
+        8.  Return the entire learning path in the specified JSON format.`;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: learningPathSchema,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error(`Error generating learning path for topic "${topic}":`, error);
+        throw new Error("Could not generate a learning path at this time. The AI may be experiencing issues.");
+    }
 };

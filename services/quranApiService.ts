@@ -1,6 +1,9 @@
 import { SurahInfo, VerseData, Reciter, TafsirResponse, VerseOfTheDayData, FullSurah, Ayah } from '../types';
 
 const API_BASE_URL = 'https://quranapi.pages.dev/api';
+const QURAN_CACHE_KEY = 'fullQuranDataV2'; // From SearchView
+const surahCache: Record<number, FullSurah> = {};
+
 
 /**
  * Fetches a list of all Surahs from the Quran API.
@@ -91,39 +94,72 @@ export const getTafsirForVerse = async (surahNumber: number, ayahNumber: number)
     }
 }
 
+
 /**
- * Fetches all verses for a specific Surah by aggregating individual verse calls.
+ * Fetches all verses for a specific Surah.
+ * It prioritizes cache sources: in-memory -> full Quran localStorage -> legacy individual surah localStorage -> network.
+ * It only writes to the in-memory cache to avoid storage quota issues.
  * @param surahNumber The chapter number.
  * @returns A promise that resolves to an object containing the full Surah data.
  */
 export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
+    // 1. Check in-memory cache first
+    if (surahCache[surahNumber]) return surahCache[surahNumber];
+
+    // 2. Check if the full Quran is cached in localStorage from the SearchView
     try {
-        // Get all surah metadata to find the one we need, including its total verses.
-        const allSurahs = await getAllSurahs();
-        const surahInfo = allSurahs.find(s => s.surahNumber === surahNumber);
+        const cachedFullQuran = localStorage.getItem(QURAN_CACHE_KEY);
+        if (cachedFullQuran) {
+            const allSurahs: FullSurah[] = JSON.parse(cachedFullQuran);
+            allSurahs.forEach(surah => {
+                surahCache[surah.id] = surah;
+            });
+            if (surahCache[surahNumber]) {
+                return surahCache[surahNumber];
+            }
+        }
+    } catch (e) {
+        console.error("Failed to read full Quran from localStorage", e);
+    }
+    
+    // 3. Check for legacy individual surah cache (read-only for backward compatibility)
+    try {
+        const legacyCacheKey = `surah_${surahNumber}`;
+        const cachedSurah = localStorage.getItem(legacyCacheKey);
+        if (cachedSurah) {
+            const parsed = JSON.parse(cachedSurah);
+            surahCache[surahNumber] = parsed;
+            return parsed;
+        }
+    } catch (e) {
+        console.error(`Failed to read legacy surah ${surahNumber} from localStorage`, e);
+    }
+
+    // 4. If not in any cache, fetch from network
+    try {
+        const allSurahsInfo = await getAllSurahs();
+        const surahInfo = allSurahsInfo.find(s => s.surahNumber === surahNumber);
 
         if (!surahInfo) {
             throw new Error(`Surah with number ${surahNumber} not found.`);
         }
 
-        // Create an array of promises for fetching each verse of the surah.
         const versePromises = Array.from({ length: surahInfo.totalAyah }, (_, i) => {
             const ayahNumber = i + 1;
             return getVerse(surahNumber, ayahNumber).then(verseData => ({
                 id: ayahNumber,
                 text: verseData.arabic,
                 translation_en: verseData.english,
+                reciters: verseData.reciters,
             }));
         });
 
-        // Fetch all verses in parallel.
         const verses: Ayah[] = await Promise.all(versePromises);
         
         if (!verses || verses.length === 0) {
             throw new Error("Failed to construct surah data with verses.");
         }
 
-        // Construct the FullSurah object.
         const fullSurah: FullSurah = {
             id: surahInfo.surahNumber,
             name: surahInfo.surahNameArabic,
@@ -134,6 +170,9 @@ export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
             verses: verses,
         };
 
+        // Put it in the in-memory cache for this session
+        surahCache[surahNumber] = fullSurah;
+        
         return fullSurah;
     } catch (error) {
          console.error(`Failed to fetch Surah ${surahNumber}:`, error);
@@ -148,16 +187,9 @@ export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
  */
 export const getRandomVerse = async (): Promise<VerseOfTheDayData> => {
     try {
-        // First, get the list of all surahs to know their lengths
         const allSurahs = await getAllSurahs();
-
-        // Pick a random surah
         const randomSurah = allSurahs[Math.floor(Math.random() * allSurahs.length)];
-        
-        // Pick a random ayah from that surah
         const randomAyahNumber = Math.floor(Math.random() * randomSurah.totalAyah) + 1;
-
-        // Fetch the specific verse data
         const verseData = await getVerse(randomSurah.surahNumber, randomAyahNumber);
 
         return {

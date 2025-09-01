@@ -10,6 +10,7 @@ import { Card } from './common/Card';
 import ReactMarkdown from 'react-markdown';
 import { VisualFeedback } from './VisualFeedback';
 import { SkeletonLoader } from './common/SkeletonLoader';
+import { useAppContext } from '../contexts/AppContext';
 
 interface TajweedViewProps {
   initialVerse: { surahNumber: number; ayahNumber: number } | null;
@@ -17,6 +18,7 @@ interface TajweedViewProps {
 }
 
 const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMounted }) => {
+  const { logChallengeAction } = useAppContext();
   const [surahs, setSurahs] = useState<SurahInfo[]>([]);
   const [selectedSurah, setSelectedSurah] = useState<SurahInfo | null>(null);
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
@@ -147,6 +149,10 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
     try {
       const response = await getTajweedFeedback(currentVerse.arabic, userRecitation);
       setFeedback(response);
+      
+      // Log for daily challenge
+      logChallengeAction('practiceAyah');
+      
       // Save to history
       const newHistoryItem: RecitationHistoryItem = {
         id: `${Date.now()}`,
