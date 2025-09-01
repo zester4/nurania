@@ -1,0 +1,8 @@
+{
+  "name": "Nurania - The AI Quran Tutor",
+  "description": "Nurania is an AI-powered study companion for the Quran and Hadith, offering contextual tafsir, recitation feedback, and interactive learning.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
