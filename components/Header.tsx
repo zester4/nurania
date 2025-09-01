@@ -23,7 +23,7 @@ const Header: React.FC = () => {
     return (
       <button
         onClick={() => setCurrentView(view)}
-        className={`px-4 py-2 text-sm md:text-base font-semibold transition-colors duration-300 rounded-md ${
+        className={`px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-semibold transition-colors duration-300 rounded-md ${
           isActive
             ? 'bg-islamic-green text-white shadow-sm'
             : 'text-stone-600 hover:bg-stone-200/70 hover:text-stone-800'
@@ -39,7 +39,7 @@ const Header: React.FC = () => {
     return (
       <button
         onClick={() => setCurrentView(view)}
-        className={`p-2.5 transition-colors duration-300 rounded-full ${
+        className={`p-2 md:p-2.5 transition-colors duration-300 rounded-full ${
           isActive
             ? 'bg-islamic-green text-white'
             : 'text-stone-500 hover:bg-stone-200/70 hover:text-stone-700'
@@ -53,27 +53,27 @@ const Header: React.FC = () => {
 
   return (
     <header className="flex-shrink-0 flex justify-between items-center pt-4 md:pt-6 pb-2">
-      <button onClick={() => setCurrentView('home')} className="text-left group">
-        <h1 className="text-2xl md:text-3xl font-bold text-islamic-green-dark group-hover:text-islamic-green transition-colors">
+      <button onClick={() => setCurrentView('home')} className="text-left group flex-shrink-0 mr-2">
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-islamic-green-dark group-hover:text-islamic-green transition-colors">
           Nurania
         </h1>
-        <p className="text-stone-500 text-sm -mt-1">The AI Quran Tutor</p>
+        <p className="text-stone-500 text-xs md:text-sm -mt-1">The AI Quran Tutor</p>
       </button>
       
-      <div className="flex items-center space-x-2">
-        <nav className="p-1.5 bg-stone-100/60 rounded-lg flex items-center space-x-1 border border-stone-200/60">
+      <div className="flex items-center space-x-1 md:space-x-2">
+        <nav className="p-1 md:p-1.5 bg-stone-100/60 rounded-lg flex items-center space-x-0.5 md:space-x-1 border border-stone-200/60">
             <NavButton view="read" label="Read" />
             <NavButton view="tajweed" label="Practice" />
             <NavButton view="learning" label="Learning" />
             <NavButton view="library" label="Library" />
         </nav>
-        <div className="border-l border-stone-300 h-6 mx-1"></div>
-        <div className="flex items-center space-x-1">
+        <div className="border-l border-stone-300 h-6 mx-1 hidden sm:block"></div>
+        <div className="flex items-center space-x-0.5 sm:space-x-1">
             <IconButton view="prayer" aria-label="Prayer Times">
-                <ClockIcon className="w-6 h-6" />
+                <ClockIcon className="w-5 h-5 md:w-6 md:h-6" />
             </IconButton>
             <IconButton view="settings" aria-label="Settings">
-                <SettingsIcon className="w-6 h-6" />
+                <SettingsIcon className="w-5 h-5 md:w-6 md:h-6" />
             </IconButton>
         </div>
       </div>

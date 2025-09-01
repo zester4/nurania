@@ -11,13 +11,8 @@ import { useAppContext } from '../contexts/AppContext';
 
 const LAST_READ_KEY = 'nuraniaLastReadPosition';
 
-interface ReadViewProps {
-  initialVerse: { surahNumber: number; ayahNumber: number } | null;
-  onViewMounted: () => void;
-}
-
-const ReadView: React.FC<ReadViewProps> = ({ initialVerse, onViewMounted }) => {
-  const { logChallengeAction } = useAppContext();
+const ReadView: React.FC = () => {
+  const { logChallengeAction, gotoVerse, clearGotoVerse } = useAppContext();
   const [surahs, setSurahs] = useState<SurahInfo[]>([]);
   const [selectedSurahNumber, setSelectedSurahNumber] = useState<number>(1);
   const [currentSurah, setCurrentSurah] = useState<FullSurah | null>(null);
@@ -31,17 +26,16 @@ const ReadView: React.FC<ReadViewProps> = ({ initialVerse, onViewMounted }) => {
   const { progress, toggleVerseRead, isVerseRead, markAllVersesRead, markAllVersesUnread, getSurahProgress } = useReadProgress();
   const { addBookmark, removeBookmark, isBookmarked } = useBookmarkedVerses();
 
-
   useEffect(() => {
-    if (initialVerse) {
-        setSelectedSurahNumber(initialVerse.surahNumber);
+    if (gotoVerse) {
+        setSelectedSurahNumber(gotoVerse.surahNumber);
     } else {
         try {
             const stored = localStorage.getItem(LAST_READ_KEY);
             if (stored) setSelectedSurahNumber(JSON.parse(stored).surahNumber);
         } catch { /* use default */ }
     }
-  }, [initialVerse]);
+  }, [gotoVerse]);
 
 
   useEffect(() => {
@@ -69,9 +63,9 @@ const ReadView: React.FC<ReadViewProps> = ({ initialVerse, onViewMounted }) => {
         
         setTimeout(() => {
             let targetAyahNumber = 1;
-            if (initialVerse && initialVerse.surahNumber === selectedSurahNumber) {
-                targetAyahNumber = initialVerse.ayahNumber;
-                onViewMounted(); // Signal that we've used the initialVerse prop
+            if (gotoVerse && gotoVerse.surahNumber === selectedSurahNumber) {
+                targetAyahNumber = gotoVerse.ayahNumber;
+                clearGotoVerse();
             } else {
                 try {
                     const stored = localStorage.getItem(LAST_READ_KEY);
@@ -96,7 +90,7 @@ const ReadView: React.FC<ReadViewProps> = ({ initialVerse, onViewMounted }) => {
       }
     };
     fetchSurahData();
-  }, [selectedSurahNumber, initialVerse, onViewMounted]);
+  }, [selectedSurahNumber, gotoVerse, clearGotoVerse]);
 
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
@@ -135,7 +129,6 @@ const ReadView: React.FC<ReadViewProps> = ({ initialVerse, onViewMounted }) => {
   }, [currentSurah]);
   
   const handleToggleRead = (surahId: number, ayahId: number) => {
-      // Log action only when marking as read, not un-read
       if (!isVerseRead(surahId, ayahId)) {
           logChallengeAction('readVerses', 1);
       }

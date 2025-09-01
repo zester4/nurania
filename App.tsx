@@ -13,28 +13,7 @@ import LearningView from './components/LearningView';
 import { useAppContext } from './contexts/AppContext';
 
 const App: React.FC = () => {
-  const { currentView, practiceVerse, gotoVerse, gotoHadith, gotoLearningPath } = useAppContext();
-  const [internalPracticeVerse, setInternalPracticeVerse] = React.useState(practiceVerse);
-  const [internalGotoVerse, setInternalGotoVerse] = React.useState(gotoVerse);
-  const [internalGotoHadith, setInternalGotoHadith] = React.useState(gotoHadith);
-  const [internalGotoLearningPath, setInternalGotoLearningPath] = React.useState(gotoLearningPath);
-  
-  React.useEffect(() => {
-    setInternalPracticeVerse(practiceVerse);
-  }, [practiceVerse]);
-
-  React.useEffect(() => {
-    setInternalGotoVerse(gotoVerse);
-  }, [gotoVerse]);
-  
-  React.useEffect(() => {
-    setInternalGotoHadith(gotoHadith);
-  }, [gotoHadith]);
-  
-  React.useEffect(() => {
-    setInternalGotoLearningPath(gotoLearningPath);
-  }, [gotoLearningPath]);
-
+  const { currentView } = useAppContext();
 
   return (
     <div className="bg-cream min-h-screen text-stone-800 font-quicksand islamic-pattern">
@@ -44,31 +23,11 @@ const App: React.FC = () => {
         <main className="flex-grow mt-4 overflow-hidden">
           {currentView === 'home' && <HomeView />}
           {currentView === 'study' && <StudyView />}
-          {currentView === 'tajweed' && (
-            <TajweedView
-              initialVerse={internalPracticeVerse}
-              onPracticeMounted={() => setInternalPracticeVerse(null)}
-            />
-          )}
-          {currentView === 'read' && (
-            <ReadView
-              initialVerse={internalGotoVerse}
-              onViewMounted={() => setInternalGotoVerse(null)}
-            />
-          )}
+          {currentView === 'tajweed' && <TajweedView />}
+          {currentView === 'read' && <ReadView />}
           {currentView === 'search' && <SearchView />}
-          {currentView === 'learning' && (
-            <LearningView
-              initialTopic={internalGotoLearningPath}
-              onViewMounted={() => setInternalGotoLearningPath(null)}
-            />
-          )}
-          {currentView === 'library' && (
-            <LibraryView 
-              initialHadith={internalGotoHadith}
-              onViewMounted={() => setInternalGotoHadith(null)}
-            />
-          )}
+          {currentView === 'learning' && <LearningView />}
+          {currentView === 'library' && <LibraryView />}
           {currentView === 'prayer' && <PrayerTimesView />}
           {currentView === 'settings' && <SettingsView />}
         </main>

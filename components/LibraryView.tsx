@@ -9,19 +9,16 @@ import { useBookmarkedVerses } from '../hooks/useBookmarkedVerses';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useAppContext } from '../contexts/AppContext';
 import { useLastViewedHadith } from '../hooks/useLastViewedHadith';
+import { useHadithNotes } from '../hooks/useHadithNotes';
 
 type LibraryTab = 'hadithSearch' | 'hadithBrowse' | 'hadithBookmarks' | 'quranBookmarks';
 
-interface LibraryViewProps {
-  initialHadith: { bookSlug: string; chapter: Chapter } | null;
-  onViewMounted: () => void;
-}
-
-export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewMounted }) => {
-    const { handleGotoVerse } = useAppContext();
+export const LibraryView: React.FC = () => {
+    const { handleGotoVerse, gotoHadith, clearGotoHadith } = useAppContext();
     const { bookmarkedHadiths, addBookmark: addHadithBookmark, removeBookmark: removeHadithBookmark, isBookmarked: isHadithBookmarked } = useBookmarkedHadiths();
     const { bookmarkedVerses, removeBookmark: removeVerseBookmark } = useBookmarkedVerses();
     const { saveLastViewedHadith } = useLastViewedHadith();
+    const { getNote, saveNote } = useHadithNotes();
 
     const [activeTab, setActiveTab] = useState<LibraryTab>('hadithSearch');
     
@@ -40,14 +37,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewM
     const [chapterHadiths, setChapterHadiths] = useState<HadithApiResponse | null>(null);
     const [browseIsLoading, setBrowseIsLoading] = useState<'chapters' | 'hadiths' | false>(false);
     const [browseError, setBrowseError] = useState<string | null>(null);
-    
+
+    // Effect to clear old search results when criteria change
     useEffect(() => {
-        if (initialHadith) {
+        setSearchResults(null);
+        setSearchError(null);
+    }, [searchTerm, hadithNumber, selectedBook]);
+    
+    // Effect to handle navigation from Home screen
+    useEffect(() => {
+        if (gotoHadith) {
             setActiveTab('hadithBrowse');
-            setBrowseSelectedBook(initialHadith.bookSlug);
-            // This will trigger the chapter fetch, and then we set the selected chapter.
+            setBrowseSelectedBook(gotoHadith.bookSlug);
         }
-    }, [initialHadith]);
+    }, [gotoHadith]);
 
     useEffect(() => {
         if (activeTab !== 'hadithBrowse') return;
@@ -62,13 +65,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewM
                 const response = await getChaptersForBook(browseSelectedBook);
                 setChapters(response.chapters);
 
-                // If navigating from home, select the chapter after they've loaded
-                if (initialHadith && initialHadith.bookSlug === browseSelectedBook) {
-                    const chapterToSelect = response.chapters.find(c => c.id === initialHadith.chapter.id);
+                if (gotoHadith && gotoHadith.bookSlug === browseSelectedBook) {
+                    const chapterToSelect = response.chapters.find(c => c.id === gotoHadith.chapter.id);
                     if (chapterToSelect) {
                         handleSelectChapter(chapterToSelect);
                     }
-                    onViewMounted(); // Signal that we've handled the prop
+                    clearGotoHadith();
                 }
             } catch (err: any) {
                 setBrowseError(err.message);
@@ -77,7 +79,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewM
             }
         };
         fetchChapters();
-    }, [browseSelectedBook, activeTab, initialHadith, onViewMounted]);
+    }, [browseSelectedBook, activeTab, gotoHadith, clearGotoHadith]);
 
     const handleSearch = async (page = 1) => {
         if (!searchTerm.trim() && !selectedBook && !hadithNumber.trim()) {
@@ -117,6 +119,24 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewM
     };
 
     const HadithCard: React.FC<{ hadith: Hadith }> = ({ hadith }) => {
+        const [isEditingNote, setIsEditingNote] = useState(false);
+        const savedNote = getNote(hadith.id) || '';
+        const [noteText, setNoteText] = useState(savedNote);
+
+        useEffect(() => {
+            setNoteText(getNote(hadith.id) || '');
+        }, [hadith.id]);
+
+        const handleSaveNote = () => {
+            saveNote(hadith.id, noteText.trim());
+            setIsEditingNote(false);
+        };
+        
+        const handleCancelEdit = () => {
+            setNoteText(savedNote);
+            setIsEditingNote(false);
+        };
+
         const getStatusBadgeColor = (status?: string) => {
             if (!status) return 'bg-stone-200 text-stone-700';
             const lowerStatus = status.toLowerCase();
@@ -151,6 +171,41 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ initialHadith, onViewM
                 <div className="space-y-4">
                     <p className="text-stone-700 leading-relaxed">{hadith.hadithEnglish}</p>
                     <p className="font-amiri text-2xl text-right leading-loose" dir="rtl">{hadith.hadithArabic}</p>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-stone-200/80">
+                    {isEditingNote ? (
+                        <div className="space-y-2">
+                            <label htmlFor={`note-${hadith.id}`} className="block text-sm font-semibold text-islamic-green-dark">My Reflection</label>
+                            <textarea
+                                id={`note-${hadith.id}`}
+                                value={noteText}
+                                onChange={(e) => setNoteText(e.target.value)}
+                                className="w-full p-2 bg-stone-50 border border-stone-300 rounded-lg focus:ring-1 focus:ring-islamic-green focus:border-islamic-green transition"
+                                rows={4}
+                                placeholder="Write your thoughts on this Hadith..."
+                                aria-label="Hadith reflection"
+                            />
+                            <div className="flex justify-end space-x-2 mt-2">
+                                <button onClick={handleCancelEdit} className="px-4 py-2 text-sm font-medium text-stone-700 rounded-md hover:bg-stone-200 transition-colors">Cancel</button>
+                                <button onClick={handleSaveNote} className="px-4 py-2 text-sm font-medium text-white bg-islamic-green rounded-md hover:bg-islamic-green-dark transition-colors shadow-sm">Save</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-semibold text-islamic-green-dark">My Reflection</h4>
+                                <button onClick={() => setIsEditingNote(true)} className="text-sm font-medium text-islamic-green hover:underline">
+                                    {savedNote ? 'Edit Reflection' : 'Add Reflection'}
+                                </button>
+                            </div>
+                            {savedNote ? (
+                                <p className="prose prose-sm max-w-none mt-2 text-stone-700 bg-stone-50 p-3 rounded-md border border-stone-200 whitespace-pre-wrap">{savedNote}</p>
+                            ) : (
+                                <p className="text-sm text-stone-500 mt-2 italic">You haven't added a reflection yet.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             </Card>
         );

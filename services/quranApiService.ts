@@ -1,9 +1,12 @@
-import { SurahInfo, VerseData, Reciter, TafsirResponse, VerseOfTheDayData, FullSurah, Ayah } from '../types';
+import { SurahInfo, VerseData, Reciter, TafsirResponse, FullSurah, Ayah, SearchResult, VerseOfTheDayData } from '../types';
 
 const API_BASE_URL = 'https://quranapi.pages.dev/api';
-const QURAN_CACHE_KEY = 'fullQuranDataV2'; // From SearchView
-const surahCache: Record<number, FullSurah> = {};
+const QURAN_CACHE_KEY = 'fullQuranDataV3';
 
+// Unified cache for all Quran data (full surahs)
+const quranDataCache: Map<number, FullSurah> = new Map();
+let isFullQuranInLocalStorage = false;
+let isQuranLoading = false;
 
 /**
  * Fetches a list of all Surahs from the Quran API.
@@ -16,7 +19,6 @@ export const getAllSurahs = async (): Promise<SurahInfo[]> => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    // Add surahNumber to each object, as it's not in the API response
     return data.map((surah: Omit<SurahInfo, 'surahNumber'>, index: number) => ({
       ...surah,
       surahNumber: index + 1,
@@ -55,7 +57,7 @@ export const getVerse = async (surahNumber: number, ayahNumber: number): Promise
         }));
         
         return {
-            arabic: json.arabic1, // Using arabic1 for text with diacritics
+            arabic: json.arabic1,
             english: json.english,
             reciters: reciters,
         };
@@ -97,52 +99,20 @@ export const getTafsirForVerse = async (surahNumber: number, ayahNumber: number)
 
 /**
  * Fetches all verses for a specific Surah.
- * It prioritizes cache sources: in-memory -> full Quran localStorage -> legacy individual surah localStorage -> network.
- * It only writes to the in-memory cache to avoid storage quota issues.
+ * Prioritizes in-memory cache, then falls back to network fetch.
  * @param surahNumber The chapter number.
  * @returns A promise that resolves to an object containing the full Surah data.
  */
 export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
-    // 1. Check in-memory cache first
-    if (surahCache[surahNumber]) return surahCache[surahNumber];
-
-    // 2. Check if the full Quran is cached in localStorage from the SearchView
-    try {
-        const cachedFullQuran = localStorage.getItem(QURAN_CACHE_KEY);
-        if (cachedFullQuran) {
-            const allSurahs: FullSurah[] = JSON.parse(cachedFullQuran);
-            allSurahs.forEach(surah => {
-                surahCache[surah.id] = surah;
-            });
-            if (surahCache[surahNumber]) {
-                return surahCache[surahNumber];
-            }
-        }
-    } catch (e) {
-        console.error("Failed to read full Quran from localStorage", e);
-    }
-    
-    // 3. Check for legacy individual surah cache (read-only for backward compatibility)
-    try {
-        const legacyCacheKey = `surah_${surahNumber}`;
-        const cachedSurah = localStorage.getItem(legacyCacheKey);
-        if (cachedSurah) {
-            const parsed = JSON.parse(cachedSurah);
-            surahCache[surahNumber] = parsed;
-            return parsed;
-        }
-    } catch (e) {
-        console.error(`Failed to read legacy surah ${surahNumber} from localStorage`, e);
+    if (quranDataCache.has(surahNumber)) {
+        return quranDataCache.get(surahNumber)!;
     }
 
-    // 4. If not in any cache, fetch from network
     try {
         const allSurahsInfo = await getAllSurahs();
         const surahInfo = allSurahsInfo.find(s => s.surahNumber === surahNumber);
 
-        if (!surahInfo) {
-            throw new Error(`Surah with number ${surahNumber} not found.`);
-        }
+        if (!surahInfo) throw new Error(`Surah with number ${surahNumber} not found.`);
 
         const versePromises = Array.from({ length: surahInfo.totalAyah }, (_, i) => {
             const ayahNumber = i + 1;
@@ -155,10 +125,7 @@ export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
         });
 
         const verses: Ayah[] = await Promise.all(versePromises);
-        
-        if (!verses || verses.length === 0) {
-            throw new Error("Failed to construct surah data with verses.");
-        }
+        if (!verses || verses.length === 0) throw new Error("Failed to construct surah data with verses.");
 
         const fullSurah: FullSurah = {
             id: surahInfo.surahNumber,
@@ -170,14 +137,96 @@ export const getSurah = async (surahNumber: number): Promise<FullSurah> => {
             verses: verses,
         };
 
-        // Put it in the in-memory cache for this session
-        surahCache[surahNumber] = fullSurah;
-        
+        quranDataCache.set(surahNumber, fullSurah);
         return fullSurah;
     } catch (error) {
          console.error(`Failed to fetch Surah ${surahNumber}:`, error);
          throw new Error(`Could not load the Surah. ${error instanceof Error ? error.message : ''}`);
     }
+};
+
+/**
+ * Checks if the full Quran data is ready for searching.
+ * @returns {boolean} True if data is loaded, false otherwise.
+ */
+export const isQuranDataReady = (): boolean => isFullQuranInLocalStorage || quranDataCache.size === 114;
+
+/**
+ * Prepares the full Quran data for searching by downloading it if not already cached.
+ * @param onProgress - A callback function to report download progress (0-100).
+ */
+export const prepareFullQuranData = async (onProgress: (progress: number) => void): Promise<void> => {
+    if (isQuranDataReady() || isQuranLoading) return;
+    isQuranLoading = true;
+
+    try {
+        const cachedData = localStorage.getItem(QURAN_CACHE_KEY);
+        if (cachedData) {
+            const parsedData: FullSurah[] = JSON.parse(cachedData);
+            parsedData.forEach(surah => quranDataCache.set(surah.id, surah));
+            isFullQuranInLocalStorage = true;
+            onProgress(100);
+            return;
+        }
+    } catch (e) {
+        console.error("Failed to load full Quran from cache", e);
+    }
+
+    try {
+        const allSurahsInfo = await getAllSurahs();
+        for (let i = 0; i < allSurahsInfo.length; i++) {
+            const info = allSurahsInfo[i];
+            await getSurah(info.surahNumber); // getSurah will fetch and populate the cache
+            const progress = Math.round(((i + 1) / allSurahsInfo.length) * 100);
+            onProgress(progress);
+        }
+        
+        try {
+             localStorage.setItem(QURAN_CACHE_KEY, JSON.stringify(Array.from(quranDataCache.values())));
+             isFullQuranInLocalStorage = true;
+        } catch (e) {
+            console.warn("Could not cache full Quran data, likely due to storage limits.", e);
+        }
+    } catch (err) {
+        console.error("Error preparing full Quran data:", err);
+        throw err;
+    } finally {
+        isQuranLoading = false;
+    }
+};
+
+/**
+ * Searches the loaded Quran data.
+ * @param query - The search term (English or Arabic).
+ * @returns An array of search results.
+ */
+export const searchQuran = (query: string): SearchResult[] => {
+    if (!isQuranDataReady() || query.trim().length < 3) {
+        return [];
+    }
+    
+    const searchResults: SearchResult[] = [];
+    const lowerCaseQuery = query.toLowerCase();
+    const arabicRegex = /[\u0600-\u06FF]/;
+    const isArabicQuery = arabicRegex.test(query);
+
+    for (const surah of quranDataCache.values()) {
+        for (const ayah of surah.verses) {
+            const englishMatch = !isArabicQuery && ayah.translation_en.toLowerCase().includes(lowerCaseQuery);
+            const arabicMatch = isArabicQuery && ayah.text.includes(query);
+
+            if (englishMatch || arabicMatch) {
+                searchResults.push({
+                    surahNumber: surah.id,
+                    surahName: surah.transliteration,
+                    ayahNumber: ayah.id,
+                    arabic: ayah.text,
+                    english: ayah.translation_en,
+                });
+            }
+        }
+    }
+    return searchResults;
 };
 
 

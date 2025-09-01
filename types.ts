@@ -273,12 +273,16 @@ export interface AppContextType {
   setCurrentView: (view: View) => void;
   practiceVerse: { surahNumber: number; ayahNumber: number } | null;
   handleResumePractice: (surahNumber: number, ayahNumber: number) => void;
+  clearPracticeVerse: () => void;
   gotoVerse: { surahNumber: number; ayahNumber: number } | null;
   handleGotoVerse: (surahNumber: number, ayahNumber: number) => void;
+  clearGotoVerse: () => void;
   gotoHadith: { bookSlug: string; chapter: Chapter } | null;
   handleGotoHadith: (bookSlug: string, chapter: Chapter) => void;
+  clearGotoHadith: () => void;
   gotoLearningPath: { topicId: string } | null;
   handleGotoLearningPath: (topicId: string) => void;
+  clearGotoLearningPath: () => void;
   settings: AppSettings;
   saveSettings: (newSettings: Partial<AppSettings>) => void;
   prayerTimes: PrayerTimes | null;

@@ -11,12 +11,8 @@ import { useLastLearningPath } from '../hooks/useLastLearningPath';
 import { CheckCircleIcon, CheckCircleFilledIcon, BookOpenIcon } from './common/IconButton';
 import { VerseModal } from './common/VerseModal';
 
-interface LearningViewProps {
-    initialTopic: { topicId: string } | null;
-    onViewMounted: () => void;
-}
-
-const LearningView: React.FC<LearningViewProps> = ({ initialTopic, onViewMounted }) => {
+const LearningView: React.FC = () => {
+    const { logChallengeAction, gotoLearningPath, clearGotoLearningPath } = useAppContext();
     const [selectedTopic, setSelectedTopic] = useState<LearningPathTopic | null>(null);
     const [learningPath, setLearningPath] = useState<LearningPath | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +20,6 @@ const LearningView: React.FC<LearningViewProps> = ({ initialTopic, onViewMounted
     const [isVerseModalOpen, setIsVerseModalOpen] = useState(false);
     const [selectedVerse, setSelectedVerse] = useState<{ surah: number, ayah: number} | null>(null);
     
-    const { logChallengeAction } = useAppContext();
     const { isStepComplete, toggleStepCompletion, getPathProgress } = useLearningProgress();
     const { saveLastLearningPath } = useLastLearningPath();
 
@@ -36,7 +31,7 @@ const LearningView: React.FC<LearningViewProps> = ({ initialTopic, onViewMounted
         try {
             const path = await generateLearningPath(topic.title);
             setLearningPath(path);
-            saveLastLearningPath(topic.id, topic.title); // Save progress
+            saveLastLearningPath(topic.id, topic.title);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -45,14 +40,14 @@ const LearningView: React.FC<LearningViewProps> = ({ initialTopic, onViewMounted
     };
 
     useEffect(() => {
-        if (initialTopic) {
-            const topicToLoad = LEARNING_PATH_TOPICS.find(t => t.id === initialTopic.topicId);
+        if (gotoLearningPath) {
+            const topicToLoad = LEARNING_PATH_TOPICS.find(t => t.id === gotoLearningPath.topicId);
             if (topicToLoad) {
                 handleSelectTopic(topicToLoad);
             }
-            onViewMounted(); // Acknowledge the prop has been handled
+            clearGotoLearningPath();
         }
-    }, [initialTopic, onViewMounted]);
+    }, [gotoLearningPath, clearGotoLearningPath]);
 
 
     const handleStepToggle = (pathId: string, stepId: string) => {

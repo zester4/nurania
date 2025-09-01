@@ -1,13 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FullSurah, SearchResult } from '../types';
-import { getAllSurahs, getSurah } from '../services/quranApiService';
+import { SearchResult } from '../types';
+import { prepareFullQuranData, searchQuran, isQuranDataReady } from '../services/quranApiService';
 import { Card } from './common/Card';
-import { SkeletonLoader } from './common/SkeletonLoader';
 import { useAppContext } from '../contexts/AppContext';
-
-const QURAN_CACHE_KEY = 'fullQuranDataV2';
-let fullQuranData: FullSurah[] | null = null;
-let isQuranLoading = false;
 
 const SearchView: React.FC = () => {
     const { handleGotoVerse } = useAppContext();
@@ -15,49 +10,20 @@ const SearchView: React.FC = () => {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loadingProgress, setLoadingProgress] = useState(0);
-    const [isDataReady, setIsDataReady] = useState(!!fullQuranData);
+    const [isDataReady, setIsDataReady] = useState(isQuranDataReady());
 
     const loadFullQuran = useCallback(async () => {
-        if (fullQuranData || isQuranLoading) return;
-        isQuranLoading = true;
-
-        try {
-            const cachedData = localStorage.getItem(QURAN_CACHE_KEY);
-            if (cachedData) {
-                fullQuranData = JSON.parse(cachedData);
-                setLoadingProgress(100);
-                setIsDataReady(true);
-                return;
-            }
-        } catch (e) { console.error("Failed to load full Quran from cache", e); }
-
-        try {
-            const allSurahsInfo = await getAllSurahs();
-            const tempQuranData: FullSurah[] = [];
-            for (let i = 0; i < allSurahsInfo.length; i++) {
-                const info = allSurahsInfo[i];
-                const surah = await getSurah(info.surahNumber);
-                tempQuranData.push(surah);
-                const progress = Math.round(((i + 1) / allSurahsInfo.length) * 100);
-                setLoadingProgress(progress);
-            }
-            fullQuranData = tempQuranData.sort((a, b) => a.id - b.id);
+        if (isQuranDataReady()) {
             setIsDataReady(true);
+            setLoadingProgress(100);
+            return;
+        };
 
-            try {
-                // Clean up old individual surah caches to make space
-                Object.keys(localStorage)
-                  .filter(key => key.startsWith('surah_'))
-                  .forEach(key => localStorage.removeItem(key));
-                  
-                localStorage.setItem(QURAN_CACHE_KEY, JSON.stringify(fullQuranData));
-            } catch (e) {
-                console.warn("Could not cache full Quran data, likely due to storage limits. Search is available, but data will be re-downloaded on next visit.", e);
-            }
+        try {
+            await prepareFullQuranData(setLoadingProgress);
+            setIsDataReady(true);
         } catch (err: any) {
-            setError(err.message || "Failed to download Quran data.");
-        } finally {
-            isQuranLoading = false;
+            setError(err.message || "Failed to download Quran data for search.");
         }
     }, []);
 
@@ -69,32 +35,11 @@ const SearchView: React.FC = () => {
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!fullQuranData || query.trim().length < 3) {
+        if (query.trim().length < 3) {
             setResults([]);
             return;
         }
-
-        const searchResults: SearchResult[] = [];
-        const lowerCaseQuery = query.toLowerCase();
-        const arabicRegex = /[\u0600-\u06FF]/;
-        const isArabicQuery = arabicRegex.test(query);
-
-        for (const surah of fullQuranData) {
-            for (const ayah of surah.verses) {
-                const englishMatch = !isArabicQuery && ayah.translation_en.toLowerCase().includes(lowerCaseQuery);
-                const arabicMatch = isArabicQuery && ayah.text.includes(query);
-
-                if (englishMatch || arabicMatch) {
-                    searchResults.push({
-                        surahNumber: surah.id,
-                        surahName: surah.transliteration,
-                        ayahNumber: ayah.id,
-                        arabic: ayah.text,
-                        english: ayah.translation_en,
-                    });
-                }
-            }
-        }
+        const searchResults = searchQuran(query);
         setResults(searchResults);
     };
 

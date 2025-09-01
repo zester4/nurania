@@ -74,18 +74,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('learning');
   }, []);
 
+  const clearPracticeVerse = useCallback(() => setPracticeVerse(null), []);
+  const clearGotoVerse = useCallback(() => setGotoVerse(null), []);
+  const clearGotoHadith = useCallback(() => setGotoHadith(null), []);
+  const clearGotoLearningPath = useCallback(() => setGotoLearningPath(null), []);
 
   const value: AppContextType = {
     currentView,
     setCurrentView,
     practiceVerse,
     handleResumePractice,
+    clearPracticeVerse,
     gotoVerse,
     handleGotoVerse,
+    clearGotoVerse,
     gotoHadith,
     handleGotoHadith,
+    clearGotoHadith,
     gotoLearningPath,
     handleGotoLearningPath,
+    clearGotoLearningPath,
     settings,
     saveSettings,
     prayerTimes,

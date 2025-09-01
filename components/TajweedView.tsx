@@ -12,13 +12,8 @@ import { VisualFeedback } from './VisualFeedback';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useAppContext } from '../contexts/AppContext';
 
-interface TajweedViewProps {
-  initialVerse: { surahNumber: number; ayahNumber: number } | null;
-  onPracticeMounted: () => void;
-}
-
-const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMounted }) => {
-  const { logChallengeAction } = useAppContext();
+const TajweedView: React.FC = () => {
+  const { logChallengeAction, practiceVerse, clearPracticeVerse } = useAppContext();
   const [surahs, setSurahs] = useState<SurahInfo[]>([]);
   const [selectedSurah, setSelectedSurah] = useState<SurahInfo | null>(null);
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
@@ -34,7 +29,7 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
 
 
   const [isLoading, setIsLoading] = useState({ surahs: true, verse: true, feedback: false, tafsir: false });
-  const [error, setError] = useState({ general: '', tafsir: '' });
+  const [error, setError] = useState({ general: '', tafsir: '', feedback: '' });
   
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -52,9 +47,8 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
         setError(prev => ({ ...prev, general: '' }));
         const surahList = await getAllSurahs();
         setSurahs(surahList);
-        // Set default surah if no initial verse is provided
-        if (!initialVerse) {
-          setSelectedSurah(surahList[0]); // Default to Al-Fatihah
+        if (!practiceVerse) {
+          setSelectedSurah(surahList[0]);
         }
       } catch (err: any) {
         setError(prev => ({ ...prev, general: err.message }));
@@ -63,19 +57,19 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
       }
     };
     fetchSurahs();
-  }, [initialVerse]);
+  }, [practiceVerse]);
 
-  // Handle pre-loading a verse from props (e.g., from home page)
+  // Handle pre-loading a verse from context
   useEffect(() => {
-    if (initialVerse && surahs.length > 0) {
-      const surahToSelect = surahs.find(s => s.surahNumber === initialVerse.surahNumber);
+    if (practiceVerse && surahs.length > 0) {
+      const surahToSelect = surahs.find(s => s.surahNumber === practiceVerse.surahNumber);
       if (surahToSelect) {
         setSelectedSurah(surahToSelect);
-        setSelectedAyah(initialVerse.ayahNumber);
+        setSelectedAyah(practiceVerse.ayahNumber);
       }
-      onPracticeMounted(); // Notify parent that the initial verse has been handled
+      clearPracticeVerse();
     }
-  }, [initialVerse, surahs, onPracticeMounted]);
+  }, [practiceVerse, surahs, clearPracticeVerse]);
 
 
   // Fetch verse text when surah or ayah changes
@@ -84,10 +78,10 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
 
     const fetchVerse = async () => {
       setIsLoading(prev => ({ ...prev, verse: true }));
-      setError({ general: '', tafsir: '' });
-      setFeedback(null); // Clear feedback for new verse
-      setTafsirData(null); // Clear tafsir for new verse
-      setSelectedHistoryItem(null); // Clear history selection
+      setError({ general: '', tafsir: '', feedback: '' });
+      setFeedback(null);
+      setTafsirData(null);
+      setSelectedHistoryItem(null);
       try {
         const verseData = await getVerse(selectedSurah.surahNumber, selectedAyah);
         setCurrentVerse(verseData);
@@ -100,7 +94,6 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
           } else {
             const defaultReciter = verseData.reciters[0];
             setSelectedReciter(defaultReciter);
-            // Also update the stored preference to this new default.
             setSelectedReciterId(defaultReciter.id);
           }
         } else {
@@ -116,7 +109,7 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
       }
     };
     fetchVerse();
-  }, [selectedSurah, selectedAyah]);
+  }, [selectedSurah, selectedAyah, selectedReciterId]);
 
   // When listening stops, get feedback
   useEffect(() => {
@@ -143,17 +136,15 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
   const handleGetFeedback = async (userRecitation: string) => {
     if (!currentVerse || !selectedSurah) return;
     setIsLoading(prev => ({ ...prev, feedback: true }));
-    setError(prev => ({...prev, general: ''}));
+    setError(prev => ({...prev, feedback: ''}));
     setFeedback(null);
     setSelectedHistoryItem(null);
     try {
       const response = await getTajweedFeedback(currentVerse.arabic, userRecitation);
       setFeedback(response);
       
-      // Log for daily challenge
       logChallengeAction('practiceAyah');
       
-      // Save to history
       const newHistoryItem: RecitationHistoryItem = {
         id: `${Date.now()}`,
         surahName: selectedSurah.surahName,
@@ -165,9 +156,8 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
       };
       addHistoryItem(newHistoryItem);
 
-    // FIX: The catch block had a syntax error which caused cascading scope issues.
     } catch (err: any) {
-      setError(prev => ({...prev, general: err.message || 'An unexpected error occurred.'}));
+      setError(prev => ({...prev, feedback: err.message || 'An unexpected error occurred.'}));
     } finally {
       setIsLoading(prev => ({ ...prev, feedback: false }));
     }
@@ -179,6 +169,7 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
     } else {
       setFeedback(null);
       setSelectedHistoryItem(null);
+      setError(prev => ({ ...prev, feedback: '' }));
       startListening('ar-SA');
     }
   };
@@ -197,7 +188,6 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
     currentRepetitionRef.current = 1;
     const url = selectedReciter.url;
     
-    // If an old audio object exists, remove its listeners
     if (audioRef.current) {
       audioRef.current.onplay = null;
       audioRef.current.onpause = null;
@@ -209,7 +199,6 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
     audioRef.current = audio;
 
     audio.onplay = () => setIsAudioPlaying(true);
-    
     const onStop = () => setIsAudioPlaying(false);
     
     const onEnded = () => {
@@ -259,8 +248,8 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
   const handleSurahChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSurah = surahs.find(s => s.surahNumber === parseInt(e.target.value)) || null;
     setSelectedSurah(newSurah);
-    setSelectedAyah(1); // Reset ayah to 1
-    audioRef.current?.pause(); // Stop audio on verse change
+    setSelectedAyah(1);
+    audioRef.current?.pause();
   };
 
   const AyahSelector = () => {
@@ -424,7 +413,9 @@ const TajweedView: React.FC<TajweedViewProps> = ({ initialVerse, onPracticeMount
 
       {isLoading.feedback && <div className="flex justify-center"><Loader /></div>}
 
-      {error.general && !isLoading.verse && <Card><p className="text-red-600 text-center">{error.general}</p></Card>}
+      {error.feedback && (
+        <Card><p className="text-red-600 text-center"><strong>AI Feedback Error:</strong> {error.feedback}</p></Card>
+      )}
 
       {feedback && currentVerse && (
         <Card>
